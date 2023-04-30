@@ -26,6 +26,7 @@ void param_defaults(struct model_params *params)
 	params->numcrashes = 1;
 	params->file = NULL;
 	params->enableCrash = true;
+	params->failStop = false;
 }
 
 static void print_usage(struct model_params *params)
@@ -56,13 +57,14 @@ static void print_usage(struct model_params *params)
 		"-c                          Number of nested crashes\n"
 		"                            Default: %u\n"
 		"-d [file]					 Deleting the persistent file after each execution.\n"
-		"-e							 Enable manual crash point.\n",
+		"-e							 Enable manual crash point.\n"
+		"-g						     Yile Gu: enable fail-stop debugging mode, stop and print trace when assertion or seg fault is encountered\n",
 		params->verbose, params->numcrashes);
 	exit(EXIT_SUCCESS);
 }
 
 void parse_options(struct model_params *params) {
-	const char *shortopts = "hsenv::p::r:d::c:f:";
+	const char *shortopts = "hsengv::p::r:d::c:f:";
 	const struct option longopts[] = {
 		{"help", no_argument, NULL, 'h'},
 		{"verbose", optional_argument, NULL, 'v'},
@@ -128,7 +130,12 @@ void parse_options(struct model_params *params) {
 			params->file = (char *) model_calloc(len, sizeof(char));
 			memcpy (params->file, optarg, len);
 			break;
-		} default:	/* '?' */
+		}
+		case 'g': {
+			params->failStop = true;
+			break;
+		}
+		 default:	/* '?' */
 			error = true;
 			break;
 		}

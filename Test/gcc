@@ -2,5 +2,5 @@
 LLVMDIR=~/llvm-project/
 CC=${LLVMDIR}/build/bin/clang
 LLVMPASS=${LLVMDIR}/build/lib/libPMCPass.so
-JAARUDIR=~/pmcheck-vmem/bin/
+JAARUDIR=~/pmcheck/bin/
 $CC -Xclang -load -Xclang ${LLVMPASS} -Wno-unused-command-line-argument -L${JAARUDIR} -lpmcheck $@

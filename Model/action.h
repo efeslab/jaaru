@@ -7,6 +7,8 @@
 
 #include <cstddef>
 #include <inttypes.h>
+#include <vector>
+#include <string>
 #include "classlist.h"
 #include "mypthread.h"
 #include "mymemory.h"
@@ -237,6 +239,9 @@ private:
 	 * (e.g. 8, 16, 32, or 64)
 	 */
 	uint size;
+
+	// store stack trace for each action
+	std::vector<std::string>* stack_trace;
 };
 
 #endif	/* __ACTION_H__ */

@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <inttypes.h>
 #include <strings.h>
+#include <vector>
+#include <string>
 
 #include "mymemory.h"
 #include "hashtable.h"

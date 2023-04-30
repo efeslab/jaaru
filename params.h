@@ -16,6 +16,7 @@ struct model_params {
 	uint numcrashes;
 	char *file;
 	bool enableCrash;
+	bool failStop;
 };
 
 void param_defaults(struct model_params *params);

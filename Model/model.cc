@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <algorithm>
+#include <chrono>
 #include <new>
 #include <stdarg.h>
 #include <string.h>
 #include <cstdlib>
 #include <dlfcn.h>
 #include <signal.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <unordered_map>
+#include <set>
 
 #include "model.h"
 #include "action.h"
@@ -25,6 +30,11 @@
 
 ModelChecker *model = NULL;
 int inside_model = 0;
+std::chrono::time_point<std::chrono::system_clock> start_time;
+jmp_buf test_jmpbuf;
+std::unordered_map<modelclock_t, ModelAction*> id_to_action;
+std::set<modelclock_t> action_ids;
+
 
 void placeholder(void *) {
 	ASSERT(0);
@@ -32,12 +42,45 @@ void placeholder(void *) {
 
 static void mprot_handle_pf(int sig, siginfo_t *si, void *unused)
 {
-	model_print("Segmentation fault at %p\n", si->si_addr);
+	model_print("### Segmentation fault at %p\n", si->si_addr);
 	model_print("For debugging, place breakpoint at: %s:%d\n",__FILE__, __LINE__);
-	model_print("Or attach gdb to process with id # %u\n", getpid());
 	print_trace();	// Trace printing may cause dynamic memory allocation
-	while(1)
-		;
+	if (model->params.verbose >= 2){
+		print_program_output();
+	}
+	if (!model->params.failStop) {
+		model_print("Fail-stop mode disabled, continue execution...\n");
+		siglongjmp(test_jmpbuf, 1);
+		
+	}
+	else {
+		model_print("Fail-stop mode enabled, halting...\n");
+		model_print("Attach gdb to process with id # %u\n", getpid());
+		while(1)
+			;
+	}
+}
+
+static void handle_assertion_error(int signum, siginfo_t *si, void *unused) {
+    if (signum == SIGABRT) {
+		// model->next_execution();
+		model_print("### Assertion failure at %p\n", si->si_addr);
+		model_print("For debugging, place breakpoint at: %s:%d\n",__FILE__, __LINE__);
+		print_trace();	// Trace printing may cause dynamic memory allocation
+		if (model->params.verbose >= 2){
+			print_program_output();
+		}
+		if (!model->params.failStop) {
+			model_print("Fail-stop mode disabled, continue execution...\n");
+			siglongjmp(test_jmpbuf, 1);
+		}
+		else {
+			model_print("Fail-stop mode enabled, halting...\n");
+			model_print("Attach gdb to process with id # %u\n", getpid());
+			while(1)
+				;
+		}
+    }
 }
 
 void install_handler() {
@@ -48,6 +91,7 @@ void install_handler() {
 	sigaltstack(&ss, NULL);
 	struct sigaction sa;
 	sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_RESTART | SA_ONSTACK;
+	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_sigaction = mprot_handle_pf;
 
@@ -56,13 +100,20 @@ void install_handler() {
 		exit(EXIT_FAILURE);
 	}
 
+	// Yile: handle assertion error
+	struct sigaction sa_assert;
+	sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_RESTART | SA_ONSTACK;
+	sigemptyset(&sa_assert.sa_mask);
+	sa_assert.sa_sigaction = handle_assertion_error;
+	sigaction(SIGABRT, &sa_assert, NULL);
+
 }
 
 void createModelIfNotExist() {
 	if (!model) {
 		model = (ModelChecker *) 0xdeadbeef;	//keep from going recursive
 		inside_model = 1;
-		snapshot_system_init(100000);
+		snapshot_system_init(200000);
 		model = new ModelChecker();
 		model->startChecker();
 		inside_model = 0;
@@ -112,8 +163,9 @@ ModelChecker::ModelChecker() :
 	numcrashes(0),
 	replaystack(),
 	totalstates(0),
-	totalexplorepoints(0)
+	totalexplorepoints(0),
 {
+	start_time =  std::chrono::system_clock::now();
 	model_print("PMCheck\n"
 							"Copyright (c) 2019 Regents of the University of California. All rights reserved.\n"
 							"Written by Hamed Gorjiara, Brian Demsky, Peizhao Ou, Brian Norris, and Weiyu Luo\n\n");
@@ -220,6 +272,7 @@ void ModelChecker::assert_bug(const char *msg, ...)
 void ModelChecker::assert_user_bug(const char *msg)
 {
 	/* If feasible bug, bail out now */
+	model_print("Caught a user assertion, switching to master with null \n");
 	assert_bug(msg);
 	switch_to_master(NULL);
 }
@@ -297,7 +350,7 @@ void ModelChecker::print_execution(bool printbugs) const
 	}
 
 	model_print("\n");
-	execution->print_summary();
+	// execution->print_summary();
 }
 
 /**
@@ -390,6 +443,12 @@ bool ModelChecker::next_execution() {
 	regionID.clear();
 	numcrashes = 0;
 
+	model_print("### Print all store ids \n");
+	for (modelclock_t action_id : action_ids) {
+		model_print("%d ", action_id);
+	}
+	model_print("\n");
+
 	return true;
 }
 
@@ -436,6 +495,17 @@ void ModelChecker::switch_from_master(Thread *thread) {
  * @return Return the value returned by the current action
  */
 uint64_t ModelChecker::switch_to_master(ModelAction *act) {
+	// get the stack trace
+	// We only care about pre-crash write operations
+	// if (prevContext == NULL && act != NULL && act->is_write()) {
+
+	// }
+	// std::shared_ptr<std::vector<void *>> saved_stack = save_stack_trace();
+	// counter ++;
+	// if (counter % 10000 == 0) {
+	// 	print_trace();
+	// }
+
 	if (modellock) {
 		static bool fork_message_printed = false;
 
@@ -486,9 +556,10 @@ bool ModelChecker::should_terminate_execution()
 
 void ModelChecker::doCrash() {
 	if (params.verbose >= 4) {
-		execution->print_summary();
+		// execution->print_summary();
 	}
-	model_print("Execution %d at sequence number %d\n",execution_number, execution->get_curr_seq_num());
+	std::chrono::time_point<std::chrono::system_clock> end_time = std::chrono::system_clock::now();
+	model_print("%d seconds: Execution %d at sequence number %d\n", int((end_time - start_time) / std::chrono::seconds(1)), execution_number, execution->get_curr_seq_num());
 	Execution_Context * ec = new Execution_Context(prevContext, execution, nodestack);
 	prevContext = ec;
 	execution->clearPreRollback();
@@ -521,11 +592,11 @@ void ModelChecker::run()
 	do {
 		Thread * t = init_thread;
 nextExecution:
-		if (params.pmdebug && prevContext != NULL) {
+		if ((params.pmdebug || params.verbose >=2) && prevContext != NULL) {
 			model_print("\n\n*******************************************************************\n");
 			model_print("Post-Crash Execution %u\n", get_execution_number());
 			model_print("*******************************************************************\n\n");
-		} else if (params.pmdebug) {
+		} else if (params.pmdebug || params.verbose >=2) {
 			model_print("\n\n*******************************************************************\n");
 			model_print("Pre-Crash Execution %u\n", get_execution_number());
 			model_print("*******************************************************************\n\n");
@@ -544,7 +615,16 @@ nextExecution:
 				thread_id_t tid = int_to_id(i);
 				Thread *thr = get_thread(tid);
 				if (!thr->is_model_thread() && !thr->is_complete() && !thr->get_pending()) {
-					switch_from_master(thr);
+					if (setjmp(test_jmpbuf) == 0) {
+						// Call the tested program with swapcontext here.
+						switch_from_master(thr);
+					} else {
+						// Handle the assertion error and return to the main process.
+						fprintf(stderr, "Assertion error / segfault occurred in the tested program.\n");
+						next_execution();
+						goto nextExecution;
+					}
+					
 					ModelAction *pendact = thr->get_pending();
 					if (pendact!= NULL && (pendact->is_write() || pendact->is_read())) {
 						execution->ensureInitialValue(pendact);
@@ -610,6 +690,14 @@ nextExecution:
 			ModelAction *curr = t->get_pending();
 
 			t->set_pending(NULL);
+			// Yile: if the action is a WRITE, store its id
+			// We are only interested in writes in the pre-crash execution, and after the crash simulation flag is enabled!
+			if (execution->getEnableCrash() && prevContext == NULL && curr != NULL && curr->is_write()) {
+				action_ids.insert(curr->get_seq_number());
+				if (id_to_action.find(curr->get_seq_number()) == id_to_action.end()) {
+					id_to_action[curr->get_seq_number()] = curr;
+				}
+			}
 			t = execution->take_step(curr);
 			if (execution->getCrashed()) {
 				doCrash();
@@ -622,6 +710,7 @@ nextExecution:
 			goto nextExecution;
 		}
 	} while(next_execution());
+	params.failStop = true;
 	model_print("******* Model-checking complete: *******\n");
 	print_stats();
 
@@ -634,6 +723,8 @@ nextExecution:
 	char filename[256];
 	snprintf_(filename, sizeof(filename), "PMCheckOutput%d", getpid());
 	unlink(filename);
+
+	exit(0);
 }
 
 

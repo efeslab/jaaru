@@ -103,6 +103,17 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc);
+
+	// Yile: only NONATOMIC_WRITE has seq number, so we are only interested in that, get stack trace
+	// TODO: but this is too slow, need another way
+	// if (type == NONATOMIC_WRITE) {
+	// 	stack_trace = get_trace();
+	// 	// print_trace();
+	// }
+	// else {
+	// 	stack_trace = NULL;
+	// }
+
 	Thread *t = thread_current();
 	this->tid = t->get_id();
 }

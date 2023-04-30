@@ -1,9 +1,15 @@
-#include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <dlfcn.h>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <vector>
+#include <memory>
 
 #include "common.h"
 #include "model.h"
@@ -15,7 +21,83 @@
 /** @brief Model-checker output file descriptor; default to stdout until redirected */
 int model_out = STDOUT_FILENO;
 
-#define CONFIG_STACKTRACE
+// // #define CONFIG_STACKTRACE
+// /** Print a backtrace of the current program state. */
+// void print_trace(void)
+// {
+// #ifdef CONFIG_STACKTRACE
+// 	print_stacktrace(model_out);
+// #else
+// 	// model_print("What?\n");
+// 	// boost::stacktrace::stacktrace st;
+// 	// std::stringstream ss;
+//     // ss << st << std::endl;
+// 	// model_print("%s\n", ss.str().c_str());
+
+// 	// // generate a file for storing stack trace, prefix by current timestamp
+// 	// // get current timestamp
+// 	// std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+// 	// std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+// 	// std::string filename = std::to_string(now_c) + ".stacktrace";
+// 	// std::fstream fs;
+// 	// fs.open(filename, std::fstream::out);
+// 	// // get file name from fs
+// 	// model_print("### Dumping stack trace to file %s\n", filename.c_str());
+
+//    	// unw_cursor_t cursor;
+//     // unw_context_t context;
+
+//     // unw_getcontext(&context);
+//     // unw_init_local(&cursor, &context);
+
+//     // while (unw_step(&cursor) > 0) {
+//     //     unw_word_t offset, pc;
+//     //     unw_get_reg(&cursor, UNW_REG_IP, &pc);
+//     //     char sym[256];
+//     //     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
+//     //         fs << (void*)pc << ": " << sym << " + 0x" << std::hex << offset << std::endl;
+//     //     } else {
+//     //         fs << (void*)pc << ": -- error: unable to obtain symbol name for this frame" << std::endl;
+//     //     }
+//     // }
+
+// 	// fs.close();
+// 		// model_print("\t%s\n", strings[i]);
+// #endif	/* CONFIG_STACKTRACE */
+// }
+
+// #define CONFIG_STACKTRACE
+
+
+// std::shared_ptr<std::vector<void *>> save_stack_trace() {
+//   const size_t max_frames = 64;
+//   auto saved_stack = std::make_shared<std::vector<void *>>(max_frames);
+
+//   int num_frames = backtrace(saved_stack->data(), max_frames);
+
+//   // Resize the vector to the actual number of frames
+//   saved_stack->resize(num_frames);
+
+//   return saved_stack;
+// }
+
+/* Get the stacktrace of the current program state*/
+std::vector<std::string>* get_trace(void)
+{
+	void *array[MAX_TRACE_LEN];
+	char **strings;
+	int size, i;
+
+	size = backtrace(array, MAX_TRACE_LEN);
+	strings = backtrace_symbols(array, size);
+	std::vector<std::string>* string_vec = new std::vector<std::string>();
+	for (i = 0;i < size;i++) {
+		std::string s(strings[i]);
+		string_vec->push_back(s);
+	}
+	free(strings);
+	return string_vec;
+}
 /** Print a backtrace of the current program state. */
 void print_trace(void)
 {
@@ -31,12 +113,39 @@ void print_trace(void)
 
 	model_print("\nDumping stack trace (%d frames):\n", size);
 
-	for (i = 0;i < size;i++)
-		model_print("\t%s\n", strings[i]);
+    // for (int i = 0; i < size; ++i) {
+    //     Dl_info info;
+    //     if (dladdr(strings[i], &info) && info.dli_fname) {
+	// 		// setup string stream to print to a string
+	// 		std::stringstream ss;
+    //         ss << info.dli_fname << "(" << strings[i] << ") [" << (void*)((uintptr_t)strings[i] - (uintptr_t)info.dli_fbase) << "]" << std::endl;
+	// 		model_print(ss.str().c_str());
+    //     } else {
+    //         model_print("\t%s\n", strings[i]);
+    //     }
+    // }
+
+	// generate a file for storing stack trace, prefix by current timestamp
+	// get current timestamp
+	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+	std::string filename = std::to_string(now_c) + ".stacktrace";
+	std::fstream fs;
+	fs.open(filename, std::fstream::out);
+	// get file name from fs
+
+	model_print("### Dumping stack trace to file %s\n", filename.c_str());
+	for (i = 0;i < size;i++) {
+		fs << strings[i] << std::endl;
+		// model_print("\t%s\n", strings[i]);
+	}
+	fs.close();
+		// model_print("\t%s\n", strings[i]);
 
 	free(strings);
 #endif	/* CONFIG_STACKTRACE */
 }
+
 
 void assert_hook(void)
 {

@@ -7,10 +7,18 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <setjmp.h>
+#include <chrono>
+#include <string>
 #include "config.h"
 #include "printf.h"
+#include "stl-model.h"
 
 extern int model_out;
+
+extern std::chrono::time_point<std::chrono::system_clock> start_time;
+
+extern jmp_buf test_jmpbuf;
 
 #define model_print(fmt, ...) do { \
 		char mprintbuf[2048];                                                \
@@ -40,12 +48,13 @@ void assert_hook(void);
 #define ASSERT(expr) \
 	do { \
 		if (!(expr)) { \
-			fprintf(stderr, "Error: assertion failed in %s at line %d\n", __FILE__, __LINE__); \
+			fprintf(stderr, "### Assertion error in %s at line %d\n", __FILE__, __LINE__); \
 			/* print_trace(); // Trace printing may cause dynamic memory allocation */ \
+			print_trace(); \
 			assert_hook();                           \
 			model_print("Or attach gdb to process with id # %u\n", getpid());               \
-			while(1) ;                       \
-			_Exit(EXIT_FAILURE); \
+			model_print("Model checker internal assertion triggered, continue execution... \n");      \
+			longjmp(test_jmpbuf, 1); \
 		} \
 	} while (0)
 #else
@@ -55,5 +64,7 @@ void assert_hook(void);
 
 #define error_msg(...) fprintf(stderr, "Error: " __VA_ARGS__)
 
+std::vector<std::string>* get_trace(void);
 void print_trace(void);
+// std::shared_ptr<std::vector<void *>> save_stack_trace();
 #endif	/* __COMMON_H__ */
