@@ -163,7 +163,7 @@ ModelChecker::ModelChecker() :
 	numcrashes(0),
 	replaystack(),
 	totalstates(0),
-	totalexplorepoints(0),
+	totalexplorepoints(0)
 {
 	start_time =  std::chrono::system_clock::now();
 	model_print("PMCheck\n"

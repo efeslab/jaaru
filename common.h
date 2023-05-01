@@ -10,6 +10,7 @@
 #include <setjmp.h>
 #include <chrono>
 #include <string>
+#include <vector>
 #include "config.h"
 #include "printf.h"
 #include "stl-model.h"
