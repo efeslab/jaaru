@@ -17,6 +17,8 @@
 /** @brief A special value to represent a failed trylock */
 #define VALUE_TRYFAILED 0
 
+uint64_t global_store_id = 0;
+
 /**
  * @brief Construct a new ModelAction
  *
@@ -32,6 +34,7 @@
 
 
 ModelAction::ModelAction(action_type_t type, memory_order order, void *loc, uint64_t value, Thread *thread, uint _size) :
+	store_stack_trace(false),
 	location(loc),
 	position(NULL),
 	lastwrite(NULL),
@@ -42,10 +45,16 @@ ModelAction::ModelAction(action_type_t type, memory_order order, void *loc, uint
 	type(type),
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
-	size(_size)
+	size(_size),
+	stack_trace(NULL)
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc || type == ATOMIC_NOP);
+
+	// Assign a store id if this is a write
+	if (type == ATOMIC_WRITE || type == ATOMIC_RMW || type == ATOMIC_INIT || type == NONATOMIC_WRITE) {
+		this->store_id = global_store_id++;
+	}
 
 	Thread *t = thread ? thread : thread_current();
 	this->tid = t!= NULL ? t->get_id() : -1;
@@ -59,6 +68,7 @@ ModelAction::ModelAction(action_type_t type, memory_order order, void *loc, uint
  */
 
 ModelAction::ModelAction(action_type_t type) :
+	store_stack_trace(false),
 	location(NULL),
 	position(NULL),
 	time(0),
@@ -69,7 +79,8 @@ ModelAction::ModelAction(action_type_t type) :
 	type(type),
 	order(memory_order_seq_cst),
 	seq_number(ACTION_INITIAL_CLOCK),
-	size(0)
+	size(0),
+	stack_trace(NULL)
 {
 	Thread *t = thread_current();
 	this->tid = t!= NULL ? t->get_id() : -1;
@@ -89,6 +100,7 @@ ModelAction::ModelAction(action_type_t type) :
  * (default), then a Thread is assigned according to the scheduler.
  */
 ModelAction::ModelAction(action_type_t type, const char * position, memory_order order, void *loc, uint64_t value, uint _size) :
+	store_stack_trace(false),
 	location(loc),
 	position(position),
 	lastwrite(NULL),
@@ -99,7 +111,8 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 	type(type),
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
-	size(_size)
+	size(_size),
+	stack_trace(NULL)
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc);
@@ -113,6 +126,11 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 	// else {
 	// 	stack_trace = NULL;
 	// }
+
+	// Assign a store id if this is a write
+	if (type == ATOMIC_WRITE || type == ATOMIC_RMW || type == ATOMIC_INIT || type == NONATOMIC_WRITE) {
+		this->store_id = global_store_id++;
+	}
 
 	Thread *t = thread_current();
 	this->tid = t->get_id();
@@ -133,6 +151,7 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
  * (default), then a Thread is assigned according to the scheduler.
  */
 ModelAction::ModelAction(action_type_t type, const char * position, memory_order order, void *loc, uint64_t value, Thread *thread) :
+	store_stack_trace(false),
 	location(loc),
 	position(position),
 	lastwrite(NULL),
@@ -143,10 +162,16 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 	type(type),
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
-	size(0)
+	size(0),
+	stack_trace(NULL)
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc);
+
+	// Assign a store id if this is a write
+	if (type == ATOMIC_WRITE || type == ATOMIC_RMW || type == ATOMIC_INIT || type == NONATOMIC_WRITE) {
+		this->store_id = global_store_id++;
+	}
 
 	Thread *t = thread ? thread : thread_current();
 	this->tid = t->get_id();
@@ -157,6 +182,8 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 ModelAction::~ModelAction() {
 	if (cv)
 		delete cv;
+	if (stack_trace)
+		delete stack_trace;
 }
 
 uint ModelAction::getOpSize() const {

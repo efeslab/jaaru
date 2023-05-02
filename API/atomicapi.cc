@@ -40,6 +40,7 @@ VOLATILELOAD(64)
 		createModelIfNotExist();                                                                                                \
 		ModelAction *action = new ModelAction(ATOMIC_WRITE, position, memory_order_volatile_store, obj, (uint64_t) val, size>>3); \
 		model->switch_to_master(action);                        \
+		if (action->should_store_stack_trace()) action->set_stack_trace(get_trace()); \
 		*((volatile uint ## size ## _t *)obj) = val;            \
 		*((volatile uint ## size ## _t *)lookupShadowEntry(obj)) = val; \
 		thread_id_t tid = thread_current()->get_id();           \
@@ -60,6 +61,7 @@ VOLATILESTORE(64)
 		createModelIfNotExist();                                                      \
 		ModelAction *action = new ModelAction(ATOMIC_INIT, position, memory_order_relaxed, obj, (uint64_t) val, size>>3); \
 		model->switch_to_master(action);                                                                                        \
+		if (action->should_store_stack_trace()) action->set_stack_trace(get_trace()); \
 		*((uint ## size ## _t *)obj) = val;                     \
 		*((uint ## size ## _t *)lookupShadowEntry(obj)) = val;  \
 		thread_id_t tid = thread_current()->get_id();                           \
@@ -101,6 +103,7 @@ PMCATOMICLOAD(64)
 		createModelIfNotExist();                                                                                                \
 		ModelAction *action =  new ModelAction(ATOMIC_WRITE, position, orders[atomic_index], obj, (uint64_t) val, size >> 3); \
 		model->switch_to_master(action);                                                                                        \
+		if (action->should_store_stack_trace()) action->set_stack_trace(get_trace()); \
 		*((volatile uint ## size ## _t *)obj) = val;                    \
 		*((volatile uint ## size ## _t *)lookupShadowEntry(obj)) = val; \
 		thread_id_t tid = thread_current()->get_id();           \
@@ -124,6 +127,7 @@ ModelAction* model_rmw_action(void *obj, uint64_t val, int atomic_index, const c
 	createModelIfNotExist();
 	ModelAction* action = new ModelAction(ATOMIC_RMW, position, orders[atomic_index], obj, val, size);
 	model->switch_to_master(action);
+	if (action->should_store_stack_trace()) action->set_stack_trace(get_trace()); \
 	return action;
 }
 

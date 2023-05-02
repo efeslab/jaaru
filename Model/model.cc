@@ -3,7 +3,6 @@
 #include <chrono>
 #include <new>
 #include <stdarg.h>
-#include <string.h>
 #include <cstdlib>
 #include <dlfcn.h>
 #include <signal.h>
@@ -11,6 +10,10 @@
 #include <stdlib.h>
 #include <unordered_map>
 #include <set>
+#include <fstream>
+#include <iostream>
+#include <unistd.h>
+#include <string>
 
 #include "model.h"
 #include "action.h"
@@ -32,8 +35,11 @@ ModelChecker *model = NULL;
 int inside_model = 0;
 std::chrono::time_point<std::chrono::system_clock> start_time;
 jmp_buf test_jmpbuf;
-std::unordered_map<modelclock_t, ModelAction*> id_to_action;
-std::set<modelclock_t> action_ids;
+// std::unordered_map<modelclock_t, ModelAction*>* id_to_store = new std::unordered_map<modelclock_t, ModelAction*>();
+// std::set<modelclock_t>* store_ids = new std::set<modelclock_t>();
+
+std::unordered_map<modelclock_t, ModelAction*> id_to_store;
+std::set<modelclock_t> store_ids;
 
 
 void placeholder(void *) {
@@ -44,7 +50,7 @@ static void mprot_handle_pf(int sig, siginfo_t *si, void *unused)
 {
 	model_print("### Segmentation fault at %p\n", si->si_addr);
 	model_print("For debugging, place breakpoint at: %s:%d\n",__FILE__, __LINE__);
-	print_trace();	// Trace printing may cause dynamic memory allocation
+	// print_trace();	// Trace printing may cause dynamic memory allocation
 	if (model->params.verbose >= 2){
 		print_program_output();
 	}
@@ -66,7 +72,7 @@ static void handle_assertion_error(int signum, siginfo_t *si, void *unused) {
 		// model->next_execution();
 		model_print("### Assertion failure at %p\n", si->si_addr);
 		model_print("For debugging, place breakpoint at: %s:%d\n",__FILE__, __LINE__);
-		print_trace();	// Trace printing may cause dynamic memory allocation
+		// print_trace();	// Trace printing may cause dynamic memory allocation
 		if (model->params.verbose >= 2){
 			print_program_output();
 		}
@@ -113,7 +119,7 @@ void createModelIfNotExist() {
 	if (!model) {
 		model = (ModelChecker *) 0xdeadbeef;	//keep from going recursive
 		inside_model = 1;
-		snapshot_system_init(200000);
+		snapshot_system_init(1000000);
 		model = new ModelChecker();
 		model->startChecker();
 		inside_model = 0;
@@ -163,7 +169,7 @@ ModelChecker::ModelChecker() :
 	numcrashes(0),
 	replaystack(),
 	totalstates(0),
-	totalexplorepoints(0),
+	totalexplorepoints(0)
 {
 	start_time =  std::chrono::system_clock::now();
 	model_print("PMCheck\n"
@@ -443,12 +449,6 @@ bool ModelChecker::next_execution() {
 	regionID.clear();
 	numcrashes = 0;
 
-	model_print("### Print all store ids \n");
-	for (modelclock_t action_id : action_ids) {
-		model_print("%d ", action_id);
-	}
-	model_print("\n");
-
 	return true;
 }
 
@@ -558,6 +558,44 @@ void ModelChecker::doCrash() {
 	if (params.verbose >= 4) {
 		// execution->print_summary();
 	}
+	model_print("### Print all store ids \n");
+	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+	// add a timestamp here as Jaaru may explore same execution sequence a few times
+	// std::string filename = std::to_string(execution->get_curr_seq_num()) + "_" + std::to_string(now_c) + ".store_ids";
+	char filename_cstr[50];
+	sprintf(filename_cstr, "%d_%ld.store_ids", execution->get_curr_seq_num(), now_c);
+	std::string filename(filename_cstr);
+	std::fstream fs;
+	fs.open(filename, std::fstream::out);
+	for (modelclock_t store_id : store_ids) {
+		model_print("%d ", store_id);
+		fs << store_id << std::endl;
+		
+		// dumping stack trace
+		// std::string filename = std::to_string(store_id) + ".stacktrace";
+		char filename_cstr[50];
+		sprintf(filename_cstr, "%d.stacktrace", store_id);
+		if (access(filename_cstr, F_OK) != -1) {
+			// file exists
+			continue;
+		}
+		std::string filename(filename_cstr);
+		std::fstream fs;
+		fs.open(filename, std::fstream::out);
+		// get file name from fs
+		std::vector<std::string>* stack_trace = (id_to_store)[store_id]->get_stack_trace();
+		model_print("### Dumping stack trace of store_id %d to file %s\n", store_id, filename.c_str());
+		for (std::string row : *stack_trace) {
+			fs << row << std::endl;
+			// model_print("\t%s\n", strings[i]);
+		}
+		fs.close();
+		
+	}
+	model_print("\n");
+	fs.close();
+	store_ids.clear();
 	std::chrono::time_point<std::chrono::system_clock> end_time = std::chrono::system_clock::now();
 	model_print("%d seconds: Execution %d at sequence number %d\n", int((end_time - start_time) / std::chrono::seconds(1)), execution_number, execution->get_curr_seq_num());
 	Execution_Context * ec = new Execution_Context(prevContext, execution, nodestack);
@@ -690,15 +728,27 @@ nextExecution:
 			ModelAction *curr = t->get_pending();
 
 			t->set_pending(NULL);
-			// Yile: if the action is a WRITE, store its id
+			t = execution->take_step(curr);
+			
+			// Yile: if the action is a nonatomic_write, store its id
 			// We are only interested in writes in the pre-crash execution, and after the crash simulation flag is enabled!
+			// if (execution->getEnableCrash() && curr != NULL && curr->is_nonatomic_write()) {
+			// 	model_print("This is a nonatomic write action %d with ptr %p \n", curr->get_seq_number(), curr);
+			// }
 			if (execution->getEnableCrash() && prevContext == NULL && curr != NULL && curr->is_write()) {
-				action_ids.insert(curr->get_seq_number());
-				if (id_to_action.find(curr->get_seq_number()) == id_to_action.end()) {
-					id_to_action[curr->get_seq_number()] = curr;
+				curr->set_store_stack_trace(true);
+				store_ids.insert(curr->get_store_id());
+				// model_print("This is a write action %d with ptr %p \n", curr->get_store_id(), curr);
+				// model_print("### Print all store ids \n");
+				// for (modelclock_t store_id : *store_ids) {
+				// 	model_print("%d ", store_id);
+				// }
+				// model_print("\n");
+				if (id_to_store.find(curr->get_store_id()) == id_to_store.end()) {
+					(id_to_store)[curr->get_store_id()] = curr;
 				}
 			}
-			t = execution->take_step(curr);
+
 			if (execution->getCrashed()) {
 				doCrash();
 				goto nextExecution;

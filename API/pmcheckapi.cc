@@ -14,6 +14,7 @@
 		Thread *thrd = thread_current();                        \
 		ModelAction * action = new ModelAction(NONATOMIC_WRITE, position, memory_order_relaxed, addrs, val, size>>3); \
 		model->switch_to_master(action);                                                                                        \
+		if (action->should_store_stack_trace()) action->set_stack_trace(get_trace()); \
 		*((volatile uint ## size ## _t *)addrs) = val;                  \
 		*((volatile uint ## size ## _t *)lookupShadowEntry(addrs)) = val; \
 		thread_id_t tid = thrd->get_id();               \

@@ -375,10 +375,14 @@ ModelAction * ModelExecution::convertNonAtomicStore(void * location, uint size) 
 	getStoreThreadAndClock(location, &storethread, &storeclock);
 	setAtomicStoreFlag(location);
 	ModelAction * act = new ModelAction(NONATOMIC_WRITE, memory_order_relaxed, location, value, get_thread(storethread), size);
-	if (storeclock == 0)
+	if (storeclock == 0) {
 		act->set_seq_number(get_next_seq_num());
-	else
+		// model_print("Setting seq number to %d for NONATOMIC_WRITE %p \n", act->get_seq_number(), act);
+	}
+	else {
 		act->set_seq_number(storeclock);
+		// model_print("Setting seq number to %d for NONATOMIC_WRITE %p \n", act->get_seq_number(), act);
+	}
 	add_normal_write_to_lists(act);
 	add_write_to_lists(act);
 	return act;

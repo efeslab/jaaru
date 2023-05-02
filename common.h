@@ -10,6 +10,7 @@
 #include <setjmp.h>
 #include <chrono>
 #include <string>
+#include <vector>
 #include "config.h"
 #include "printf.h"
 #include "stl-model.h"
@@ -54,7 +55,7 @@ void assert_hook(void);
 			assert_hook();                           \
 			model_print("Or attach gdb to process with id # %u\n", getpid());               \
 			model_print("Model checker internal assertion triggered, continue execution... \n");      \
-			longjmp(test_jmpbuf, 1); \
+			siglongjmp(test_jmpbuf, 1); \
 		} \
 	} while (0)
 #else
