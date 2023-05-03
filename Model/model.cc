@@ -559,42 +559,43 @@ void ModelChecker::doCrash() {
 		// execution->print_summary();
 	}
 	model_print("### Print all store ids \n");
-	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+	// std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	// std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 	// add a timestamp here as Jaaru may explore same execution sequence a few times
 	// std::string filename = std::to_string(execution->get_curr_seq_num()) + "_" + std::to_string(now_c) + ".store_ids";
-	char filename_cstr[50];
-	sprintf(filename_cstr, "%d_%ld.store_ids", execution->get_curr_seq_num(), now_c);
-	std::string filename(filename_cstr);
-	std::fstream fs;
-	fs.open(filename, std::fstream::out);
+	// char filename_cstr[50];
+	// sprintf(filename_cstr, "%d_%ld.store_ids", execution->get_curr_seq_num(), now_c);
+	// std::string filename(filename_cstr);
+	// std::fstream fs;
+	// fs.open(filename_cstr, std::fstream::out);
 	for (modelclock_t store_id : store_ids) {
 		model_print("%d ", store_id);
-		fs << store_id << std::endl;
+		// fs << store_id << std::endl;
 		
 		// dumping stack trace
 		// std::string filename = std::to_string(store_id) + ".stacktrace";
-		char filename_cstr[50];
-		sprintf(filename_cstr, "%d.stacktrace", store_id);
-		if (access(filename_cstr, F_OK) != -1) {
-			// file exists
-			continue;
-		}
-		std::string filename(filename_cstr);
-		std::fstream fs;
-		fs.open(filename, std::fstream::out);
-		// get file name from fs
-		std::vector<std::string>* stack_trace = (id_to_store)[store_id]->get_stack_trace();
-		model_print("### Dumping stack trace of store_id %d to file %s\n", store_id, filename.c_str());
-		for (std::string row : *stack_trace) {
-			fs << row << std::endl;
-			// model_print("\t%s\n", strings[i]);
-		}
-		fs.close();
+		// char filename_cstr[50];
+		// sprintf(filename_cstr, "%d.stacktrace", store_id);
+		// if (access(filename_cstr, F_OK) != -1) {
+		// 	// file exists
+		// 	continue;
+		// }
+		// // std::string filename(filename_cstr);
+		// std::fstream fs;
+		// fs.open(filename_cstr, std::fstream::out);
+		// // get file name from fs
+		// std::vector<char*> stack_trace = (id_to_store)[store_id]->get_stack_trace();
+		// model_print("### Dumping stack trace of store_id %d to file %s\n", store_id, filename_cstr);
+		// for (size_t i = 0; i < stack_trace.size(); i++) {
+		// 	// model_print("%d-th row stacktrace memmory addr %p \n", i, stack_trace[i]);
+		// 	// fs << stack_trace[i] << std::endl;
+		// 	model_print("\t%s\n", stack_trace[i]);
+		// }
+		// fs.close();
 		
 	}
 	model_print("\n");
-	fs.close();
+	// fs.close();
 	store_ids.clear();
 	std::chrono::time_point<std::chrono::system_clock> end_time = std::chrono::system_clock::now();
 	model_print("%d seconds: Execution %d at sequence number %d\n", int((end_time - start_time) / std::chrono::seconds(1)), execution_number, execution->get_curr_seq_num());

@@ -21,6 +21,13 @@ extern std::chrono::time_point<std::chrono::system_clock> start_time;
 
 extern jmp_buf test_jmpbuf;
 
+// define a new struct containing size and strings for stack trace
+struct stack_trace_struct {
+	int sz;
+	char** strings;
+};
+
+
 #define model_print(fmt, ...) do { \
 		char mprintbuf[2048];                                                \
 		int printbuflen=snprintf_(mprintbuf, 2048, fmt, ## __VA_ARGS__);     \
@@ -51,7 +58,6 @@ void assert_hook(void);
 		if (!(expr)) { \
 			fprintf(stderr, "### Assertion error in %s at line %d\n", __FILE__, __LINE__); \
 			/* print_trace(); // Trace printing may cause dynamic memory allocation */ \
-			print_trace(); \
 			assert_hook();                           \
 			model_print("Or attach gdb to process with id # %u\n", getpid());               \
 			model_print("Model checker internal assertion triggered, continue execution... \n");      \
@@ -65,7 +71,7 @@ void assert_hook(void);
 
 #define error_msg(...) fprintf(stderr, "Error: " __VA_ARGS__)
 
-std::vector<std::string>* get_trace(void);
+stack_trace_struct get_trace(void);
 void print_trace(void);
 // std::shared_ptr<std::vector<void *>> save_stack_trace();
 #endif	/* __COMMON_H__ */

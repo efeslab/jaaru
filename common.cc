@@ -82,7 +82,7 @@ int model_out = STDOUT_FILENO;
 // }
 
 /* Get the stacktrace of the current program state*/
-std::vector<std::string>* get_trace(void)
+stack_trace_struct get_trace(void)
 {
 	void *array[MAX_TRACE_LEN];
 	char **strings;
@@ -90,13 +90,17 @@ std::vector<std::string>* get_trace(void)
 
 	size = backtrace(array, MAX_TRACE_LEN);
 	strings = backtrace_symbols(array, size);
-	std::vector<std::string>* string_vec = new std::vector<std::string>();
-	for (i = 0;i < size;i++) {
-		std::string s(strings[i]);
-		string_vec->push_back(s);
-	}
-	free(strings);
-	return string_vec;
+	stack_trace_struct stack_trace;
+	stack_trace.sz = size;
+	stack_trace.strings = strings;
+	// std::vector<std::string>* string_vec = new std::vector<std::string>();
+	// for (i = 0;i < size;i++) {
+	// 	// std::string s(strings[i]);
+	// 	// string_vec->push_back(s);
+	// 	string_list.push_back(strings[i]);
+	// }
+	// free(strings);
+	return stack_trace;
 }
 /** Print a backtrace of the current program state. */
 void print_trace(void)

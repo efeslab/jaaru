@@ -185,11 +185,11 @@ public:
 
 	void set_store_stack_trace(bool store_stack_trace) { this->store_stack_trace = store_stack_trace; }
 	bool should_store_stack_trace() { return store_stack_trace; }
-	void set_stack_trace(std::vector<std::string>* stack_trace) { 
+	void set_stack_trace(std::vector<char*> stack_trace) { 
 		// model_print("set stack trace for %p \n", this);
 		this->stack_trace = stack_trace; 
 		}
-	std::vector<std::string>* get_stack_trace() { return stack_trace; }
+	std::vector<char*>  get_stack_trace() { return stack_trace; }
 	uint64_t get_store_id() { return store_id; }
 
 
@@ -254,7 +254,7 @@ private:
 	uint size;
 
 	// store stack trace for each action
-	std::vector<std::string>* stack_trace;
+	std::vector<char*> stack_trace;
 
 	// store the store_id for each write action
 	uint64_t store_id;

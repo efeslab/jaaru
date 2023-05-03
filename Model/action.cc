@@ -46,7 +46,7 @@ ModelAction::ModelAction(action_type_t type, memory_order order, void *loc, uint
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
 	size(_size),
-	stack_trace(NULL)
+	stack_trace()
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc || type == ATOMIC_NOP);
@@ -80,7 +80,7 @@ ModelAction::ModelAction(action_type_t type) :
 	order(memory_order_seq_cst),
 	seq_number(ACTION_INITIAL_CLOCK),
 	size(0),
-	stack_trace(NULL)
+	stack_trace()
 {
 	Thread *t = thread_current();
 	this->tid = t!= NULL ? t->get_id() : -1;
@@ -112,7 +112,7 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
 	size(_size),
-	stack_trace(NULL)
+	stack_trace()
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc);
@@ -163,7 +163,7 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 	order(order),
 	seq_number(ACTION_INITIAL_CLOCK),
 	size(0),
-	stack_trace(NULL)
+	stack_trace()
 {
 	/* References to NULL atomic variables can end up here */
 	ASSERT(loc);
@@ -182,8 +182,9 @@ ModelAction::ModelAction(action_type_t type, const char * position, memory_order
 ModelAction::~ModelAction() {
 	if (cv)
 		delete cv;
-	if (stack_trace)
-		delete stack_trace;
+	// for (size_t i = 0; i < stack_trace.size(); i++) {
+	// 	free(stack_trace[i]);
+	// }
 }
 
 uint ModelAction::getOpSize() const {
