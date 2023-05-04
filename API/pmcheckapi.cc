@@ -24,7 +24,6 @@
 				std::fstream fs;	\
 				fs.open(filename_cstr, std::fstream::out); \
 				stack_trace_struct stack_trace = get_trace(); \
-				model_print("### Dumping stack trace of store_id %ld to file %s\n", action->get_store_id(), filename_cstr);	\
 				for (int i = 0; i < stack_trace.sz; i++) {	\
 					fs << stack_trace.strings[i] << std::endl;	\
 				}	\

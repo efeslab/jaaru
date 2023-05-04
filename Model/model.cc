@@ -38,12 +38,12 @@ jmp_buf test_jmpbuf;
 // std::unordered_map<modelclock_t, ModelAction*>* id_to_store = new std::unordered_map<modelclock_t, ModelAction*>();
 // std::set<modelclock_t>* store_ids = new std::set<modelclock_t>();
 
-std::unordered_map<modelclock_t, ModelAction*> id_to_store;
-std::unordered_map<modelclock_t, modelclock_t> exeseq_to_last_store;
+// std::unordered_map<modelclock_t, ModelAction*> id_to_store;
+// std::unordered_map<modelclock_t, modelclock_t> exeseq_to_last_store;
 std::set<modelclock_t> store_ids;
 
-modelclock_t last_exec_seq;
-modelclock_t last_store_id;
+// modelclock_t last_exec_seq;
+// modelclock_t last_store_id;
 
 void placeholder(void *) {
 	ASSERT(0);
@@ -122,7 +122,7 @@ void createModelIfNotExist() {
 	if (!model) {
 		model = (ModelChecker *) 0xdeadbeef;	//keep from going recursive
 		inside_model = 1;
-		snapshot_system_init(1000000);
+		snapshot_system_init(200000);
 		model = new ModelChecker();
 		model->startChecker();
 		inside_model = 0;
@@ -172,11 +172,12 @@ ModelChecker::ModelChecker() :
 	numcrashes(0),
 	replaystack(),
 	totalstates(0),
-	totalexplorepoints(0)
+	totalexplorepoints(0),
+	last_store_id(0)
 {
 	start_time =  std::chrono::system_clock::now();
-	last_exec_seq = 0;
-	last_store_id = 0;
+	// last_exec_seq = 0;
+	// last_store_id = 0;
 	model_print("PMCheck\n"
 							"Copyright (c) 2019 Regents of the University of California. All rights reserved.\n"
 							"Written by Hamed Gorjiara, Brian Demsky, Peizhao Ou, Brian Norris, and Weiyu Luo\n\n");
@@ -607,6 +608,7 @@ void ModelChecker::doCrash() {
 		
 	}
 	model_print("\n");
+	if (!store_ids.empty()) last_store_id = *(store_ids.rbegin());
 	// fs.close();
 	store_ids.clear();
 	std::chrono::time_point<std::chrono::system_clock> end_time = std::chrono::system_clock::now();
@@ -756,19 +758,26 @@ nextExecution:
 			// if (execution->getEnableCrash() && prevContext == NULL && curr != NULL && curr->is_write() && curr->get_store_id() > last_store_id) {
 			 
 			if (execution->getEnableCrash() && prevContext == NULL && curr != NULL && curr->is_write()) {
+				if (execution_number == 1) last_store_id = curr->get_store_id();
+				else {
+					if (curr->get_store_id() >= last_store_id) {
+						curr->set_store_stack_trace(true);
+						store_ids.insert(curr->get_store_id());
+					}
+				}
 				// Update the last store id if we have a new execution sequence
 				// model_print("### Last exec seq: %d, curr seq: %d \n", last_exec_seq, execution->get_curr_seq_num());
-				curr->set_store_stack_trace(true);
-				store_ids.insert(curr->get_store_id());
+				// curr->set_store_stack_trace(true);
+				// store_ids.insert(curr->get_store_id());
 				// model_print("This is a write action %d with ptr %p \n", curr->get_store_id(), curr);
 				// model_print("### Print all store ids \n");
 				// for (modelclock_t store_id : *store_ids) {
 				// 	model_print("%d ", store_id);
 				// }
 				// model_print("\n");
-				if (id_to_store.find(curr->get_store_id()) == id_to_store.end()) {
-					(id_to_store)[curr->get_store_id()] = curr;
-				}
+				// if (id_to_store.find(curr->get_store_id()) == id_to_store.end()) {
+				// 	(id_to_store)[curr->get_store_id()] = curr;
+				// }
 			}
 
 			if (execution->getCrashed()) {

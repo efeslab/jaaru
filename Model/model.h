@@ -108,6 +108,9 @@ private:
 	ucontext_t system_context;
 	double totalstates;
 	int totalexplorepoints;
+
+	modelclock_t last_store_id;
+	
 	/** @brief The cumulative execution stats */
 	struct execution_stats stats;
 	void record_stats();
